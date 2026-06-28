@@ -2,6 +2,12 @@ import streamlit as st
 import streamlit.components.v1 as components
 import sqlite3
 from datetime import datetime
+import smtplib
+from email.mime.text import MIMEText
+import random
+import time
+
+NG_WORDS = ["ばか", "あほ", "死ね", "殺す", "うんこ", "ちんこ", "アホ", "バカ", "カス", "ゴミ", "クソ"]
 import httpx
 
 # httpx 0.28.0+ compatibility patch for youtube-search-python
@@ -176,7 +182,55 @@ def update_status(req_id, new_status):
     conn.commit()
     conn.close()
 
+def check_rate_limit_db(handle_name):
+    conn = sqlite3.connect(DB_FILE)
+    c = conn.cursor()
+    c.execute("SELECT COUNT(*) FROM song_requests WHERE handle_name = ? AND timestamp >= datetime('now', '-3 minutes')", (handle_name,))
+    count = c.fetchone()[0]
+    conn.close()
+    return count > 0
+
 init_db()
+
+# ==========================================
+# 2.5 日替わりパスワード自動生成とメール送信
+# ==========================================
+@st.cache_resource
+def get_daily_password_and_notify(date_str):
+    """日替わりパスワードを生成し、Gmail経由で管理者に送信する"""
+    new_num = f"{random.randint(0, 9999):04d}"
+    daily_pw = f"{new_num}disco"
+    
+    try:
+        if "email" in st.secrets:
+            sender_email = st.secrets["email"]["sender"]
+            app_password = st.secrets["email"]["password"]
+            receiver_email = st.secrets["email"]["receiver"]
+            
+            msg = MIMEText(f"本日のDJパネル パスワードは【 {daily_pw} 】です。\n不正アクセスを防ぐため、他者には教えないでください。")
+            msg['Subject'] = f"【DJアプリ】本日のパスワード ({date_str})"
+            msg['From'] = sender_email
+            msg['To'] = receiver_email
+            
+            server = smtplib.SMTP_SSL('smtp.gmail.com', 465)
+            server.login(sender_email, app_password)
+            server.send_message(msg)
+            server.quit()
+            print(f"[{date_str}] パスワード通知メールを送信しました。")
+    except Exception as e:
+        print(f"メール送信エラー: {e}")
+        pass
+        
+    return daily_pw
+
+today_str = datetime.now().strftime("%Y-%m-%d")
+ADMIN_PASSWORD = get_daily_password_and_notify(today_str)
+
+def contains_ng_word(text):
+    for word in NG_WORDS:
+        if word in text:
+            return True
+    return False
 
 # ==========================================
 # 3. セッションステート管理（状態の保持）
@@ -193,6 +247,8 @@ if 'search_obj' not in st.session_state:
     st.session_state.search_obj = None
 if 'search_results' not in st.session_state:
     st.session_state.search_results = []
+if 'last_request_time' not in st.session_state:
+    st.session_state.last_request_time = 0
 
 def perform_search(query, artist):
     full_query = f"{query} {artist}".strip()
@@ -225,7 +281,7 @@ def reset_form():
 st.sidebar.title("DJ Control")
 admin_password = st.sidebar.text_input("Password", type="password")
 
-if admin_password != "dj4649":
+if admin_password != ADMIN_PASSWORD:
     # ---------- 一般ユーザー画面 ----------
     st.title("🎵 曲リクエスト")
     
@@ -238,6 +294,8 @@ if admin_password != "dj4649":
         if st.button("🔍 YouTubeで検索する", use_container_width=True):
             if not handle_name.strip() or not song_title.strip():
                 st.error("ハンドルネームと曲名は必須です。")
+            elif contains_ng_word(handle_name) or contains_ng_word(song_title) or contains_ng_word(artist_name):
+                st.error("入力内容に不適切な表現が含まれているため検索できません。")
             else:
                 st.session_state.search_handle = handle_name
                 with st.spinner("検索中..."):
@@ -269,8 +327,21 @@ if admin_password != "dj4649":
                 st.markdown(f'<div class="yt-channel">{channel}</div>', unsafe_allow_html=True)
                 if st.button("✨ リクエスト", key=f"req_{video['id']}", use_container_width=True):
                     final_artist = st.session_state.search_artist if st.session_state.search_artist.strip() else channel
-                    submit_request(st.session_state.search_handle, title, final_artist, url)
-                    st.rerun()
+                    handle = st.session_state.search_handle
+                    
+                    if contains_ng_word(handle) or contains_ng_word(title) or contains_ng_word(final_artist):
+                        st.error("不適切な表現が含まれているため送信できません。入力内容を見直してください。")
+                    else:
+                        current_time = time.time()
+                        time_diff = current_time - st.session_state.last_request_time
+                        
+                        if time_diff < 180 or check_rate_limit_db(handle):
+                            remaining = int(180 - time_diff) if time_diff < 180 else 180
+                            st.warning(f"連投は制限されています。あと約{remaining}秒お待ちいただくか、時間をおいて再度お試しください。")
+                        else:
+                            submit_request(handle, title, final_artist, url)
+                            st.session_state.last_request_time = time.time()
+                            st.rerun()
             
             with st.expander("▶️ 試聴する（動画を再生）"):
                 if url:
