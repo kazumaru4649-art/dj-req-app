@@ -136,20 +136,27 @@ def init_db():
         c.execute("ALTER TABLE song_requests ADD COLUMN handle_name TEXT DEFAULT '名無し'")
     except sqlite3.OperationalError:
         pass
+    try:
+        c.execute("ALTER TABLE song_requests ADD COLUMN comment TEXT DEFAULT ''")
+    except sqlite3.OperationalError:
+        pass
     conn.commit()
     conn.close()
 
-def add_request(handle, title, artist, url):
+def add_request(handle, title, artist, url, comment):
     conn = sqlite3.connect(DB_FILE)
     c = conn.cursor()
-    c.execute("INSERT INTO song_requests (handle_name, song_title, artist_name, youtube_url) VALUES (?, ?, ?, ?)", (handle, title, artist, url))
+    c.execute("INSERT INTO song_requests (handle_name, song_title, artist_name, youtube_url, comment) VALUES (?, ?, ?, ?, ?)", (handle, title, artist, url, comment))
     conn.commit()
     conn.close()
 
 def get_pending_requests():
     conn = sqlite3.connect(DB_FILE)
     c = conn.cursor()
-    c.execute("SELECT id, timestamp, handle_name, song_title, artist_name, youtube_url FROM song_requests WHERE status = 'Pending' ORDER BY timestamp ASC")
+    try:
+        c.execute("SELECT id, timestamp, handle_name, song_title, artist_name, youtube_url, comment FROM song_requests WHERE status = 'Pending' ORDER BY timestamp ASC")
+    except sqlite3.OperationalError:
+        c.execute("SELECT id, timestamp, handle_name, song_title, artist_name, youtube_url, '' as comment FROM song_requests WHERE status = 'Pending' ORDER BY timestamp ASC")
     rows = c.fetchall()
     conn.close()
     return rows
@@ -157,7 +164,10 @@ def get_pending_requests():
 def get_played_requests():
     conn = sqlite3.connect(DB_FILE)
     c = conn.cursor()
-    c.execute("SELECT id, timestamp, handle_name, song_title, artist_name, youtube_url FROM song_requests WHERE status = 'Played' ORDER BY timestamp DESC")
+    try:
+        c.execute("SELECT id, timestamp, handle_name, song_title, artist_name, youtube_url, comment FROM song_requests WHERE status = 'Played' ORDER BY timestamp DESC")
+    except sqlite3.OperationalError:
+        c.execute("SELECT id, timestamp, handle_name, song_title, artist_name, youtube_url, '' as comment FROM song_requests WHERE status = 'Played' ORDER BY timestamp DESC")
     rows = c.fetchall()
     conn.close()
     return rows
@@ -165,11 +175,14 @@ def get_played_requests():
 def get_all_requests_for_download():
     conn = sqlite3.connect(DB_FILE)
     c = conn.cursor()
-    c.execute("SELECT timestamp, handle_name, song_title, artist_name, status, youtube_url FROM song_requests ORDER BY timestamp ASC")
+    try:
+        c.execute("SELECT timestamp, handle_name, song_title, artist_name, comment, status, youtube_url FROM song_requests ORDER BY timestamp ASC")
+    except sqlite3.OperationalError:
+        c.execute("SELECT timestamp, handle_name, song_title, artist_name, '' as comment, status, youtube_url FROM song_requests ORDER BY timestamp ASC")
     rows = c.fetchall()
     conn.close()
     
-    csv_text = "リクエスト日時,ハンドルネーム,曲名,アーティスト名,ステータス,YouTubeリンク\n"
+    csv_text = "リクエスト日時,ハンドルネーム,曲名,アーティスト名,コメント,ステータス,YouTubeリンク\n"
     for r in rows:
         row_data = [str(x).replace(',', '，') for x in r]
         csv_text += ",".join(row_data) + "\n"
@@ -241,6 +254,8 @@ if 'search_query' not in st.session_state:
     st.session_state.search_query = ''
 if 'search_artist' not in st.session_state:
     st.session_state.search_artist = ''
+if 'search_comment' not in st.session_state:
+    st.session_state.search_comment = ''
 if 'search_handle' not in st.session_state:
     st.session_state.search_handle = ''
 if 'search_obj' not in st.session_state:
@@ -256,27 +271,29 @@ if 'login_failed_count' not in st.session_state:
 if 'lockout_until' not in st.session_state:
     st.session_state.lockout_until = 0
 
-def perform_search(query, artist):
+def perform_search(query, artist, comment):
     full_query = f"{query} {artist}".strip()
     st.session_state.search_obj = VideosSearch(full_query, limit=5)
     st.session_state.search_results = st.session_state.search_obj.result()['result']
     st.session_state.step = 'results'
     st.session_state.search_query = query
     st.session_state.search_artist = artist
+    st.session_state.search_comment = comment
 
 def load_more():
     if st.session_state.search_obj:
         st.session_state.search_obj.next()
         st.session_state.search_results.extend(st.session_state.search_obj.result()['result'])
 
-def submit_request(handle, title, artist, url):
-    add_request(handle, title, artist, url)
+def submit_request(handle, title, artist, url, comment):
+    add_request(handle, title, artist, url, comment)
     st.session_state.step = 'success'
 
 def reset_form():
     st.session_state.step = 'input'
     st.session_state.search_query = ''
     st.session_state.search_artist = ''
+    st.session_state.search_comment = ''
     st.session_state.search_handle = ''
     st.session_state.search_obj = None
     st.session_state.search_results = []
@@ -331,16 +348,17 @@ if not st.session_state.is_admin_logged_in:
         handle_name = st.text_input("ハンドルネーム (必須)", value=st.session_state.search_handle)
         song_title = st.text_input("曲名 (必須)", value=st.session_state.search_query)
         artist_name = st.text_input("アーティスト名 (任意)", value=st.session_state.search_artist)
+        user_comment = st.text_area("コメント (120文字以内・任意)", value=st.session_state.search_comment, max_chars=120)
         
         if st.button("🔍 YouTubeで検索する", use_container_width=True):
             if not handle_name.strip() or not song_title.strip():
                 st.error("ハンドルネームと曲名は必須です。")
-            elif contains_ng_word(handle_name) or contains_ng_word(song_title) or contains_ng_word(artist_name):
+            elif contains_ng_word(handle_name) or contains_ng_word(song_title) or contains_ng_word(artist_name) or contains_ng_word(user_comment):
                 st.error("入力内容に不適切な表現が含まれているため検索できません。")
             else:
                 st.session_state.search_handle = handle_name
                 with st.spinner("検索中..."):
-                    perform_search(song_title, artist_name)
+                    perform_search(song_title, artist_name, user_comment)
                 st.rerun()
 
     elif st.session_state.step == 'results':
@@ -369,8 +387,9 @@ if not st.session_state.is_admin_logged_in:
                 if st.button("✨ リクエスト", key=f"req_{video['id']}", use_container_width=True):
                     final_artist = st.session_state.search_artist if st.session_state.search_artist.strip() else channel
                     handle = st.session_state.search_handle
+                    comment = st.session_state.search_comment
                     
-                    if contains_ng_word(handle) or contains_ng_word(title) or contains_ng_word(final_artist):
+                    if contains_ng_word(handle) or contains_ng_word(title) or contains_ng_word(final_artist) or contains_ng_word(comment):
                         st.error("不適切な表現が含まれているため送信できません。入力内容を見直してください。")
                     else:
                         current_time = time.time()
@@ -380,7 +399,7 @@ if not st.session_state.is_admin_logged_in:
                             remaining = int(180 - time_diff) if time_diff < 180 else 180
                             st.warning(f"連投は制限されています。あと約{remaining}秒お待ちいただくか、時間をおいて再度お試しください。")
                         else:
-                            submit_request(handle, title, final_artist, url)
+                            submit_request(handle, title, final_artist, url, comment)
                             st.session_state.last_request_time = time.time()
                             st.rerun()
             
@@ -432,13 +451,16 @@ else:
             st.info("現在、保留中のリクエストはありません。")
         
         for req in requests:
-            req_id, timestamp, handle, title, artist, url = req
+            req_id, timestamp, handle, title, artist, url, comment = req
+            
+            comment_html = f'<div style="background-color: #333; padding: 10px; border-radius: 5px; margin-top: 10px; font-size: 14px;">💬 {comment}</div>' if comment else ""
             
             st.markdown(f"""
             <div class="request-card">
                 <div class="request-title">{title}</div>
                 <div class="request-artist">👤 {artist}</div>
                 <div class="request-meta">📛 依頼者: {handle} &nbsp;|&nbsp; 🕒 {timestamp}</div>
+                {comment_html}
             </div>
             """, unsafe_allow_html=True)
             
@@ -468,13 +490,16 @@ else:
             st.info("プレイ済みの履歴はありません。")
             
         for req in requests:
-            req_id, timestamp, handle, title, artist, url = req
+            req_id, timestamp, handle, title, artist, url, comment = req
+            
+            comment_html = f'<div style="background-color: #333; padding: 10px; border-radius: 5px; margin-top: 10px; font-size: 14px;">💬 {comment}</div>' if comment else ""
             
             st.markdown(f"""
             <div class="request-card" style="border-left-color: #555555;">
                 <div class="request-title">{title}</div>
                 <div class="request-artist">👤 {artist}</div>
                 <div class="request-meta">📛 依頼者: {handle} &nbsp;|&nbsp; 🕒 {timestamp}</div>
+                {comment_html}
             </div>
             """, unsafe_allow_html=True)
             
