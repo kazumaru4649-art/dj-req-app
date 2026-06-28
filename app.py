@@ -291,7 +291,12 @@ if not st.session_state.is_admin_logged_in:
     if current_time < st.session_state.lockout_until:
         remaining = int(st.session_state.lockout_until - current_time)
         st.sidebar.error(f"⚠️ 3回間違えたためロックされています。\nあと {remaining}秒 お待ちください。")
+        time.sleep(1)
+        st.rerun()
     else:
+        if st.session_state.login_failed_count >= 3:
+            st.session_state.login_failed_count = 0
+            
         admin_password = st.sidebar.text_input("Password", type="password")
         if st.sidebar.button("🔑 ログイン", use_container_width=True):
             if admin_password == ADMIN_PASSWORD:
