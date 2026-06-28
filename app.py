@@ -6,6 +6,10 @@ import smtplib
 from email.mime.text import MIMEText
 import random
 import time
+import urllib.request
+import urllib.parse
+import re
+import json
 
 NG_WORDS = ["ばか", "あほ", "死ね", "殺す", "うんこ", "ちんこ", "アホ", "バカ", "カス", "ゴミ", "クソ"]
 import httpx
@@ -313,10 +317,56 @@ if 'login_failed_count' not in st.session_state:
 if 'lockout_until' not in st.session_state:
     st.session_state.lockout_until = 0
 
+def fallback_search(query, limit=5):
+    try:
+        url = "https://www.youtube.com/results?search_query=" + urllib.parse.quote(query)
+        req = urllib.request.Request(url, headers={'User-Agent': 'Mozilla/5.0'})
+        html = urllib.request.urlopen(req).read().decode('utf-8')
+        m = re.search(r'ytInitialData\s*=\s*({.+?});\s*</script>', html)
+        if not m: return []
+        data = json.loads(m.group(1))
+        
+        videos = []
+        def extract(obj):
+            if len(videos) >= limit: return
+            if isinstance(obj, dict):
+                if 'videoRenderer' in obj:
+                    v = obj['videoRenderer']
+                    title = v.get('title', {}).get('runs', [{}])[0].get('text', 'Unknown')
+                    channel = v.get('ownerText', {}).get('runs', [{}])[0].get('text', 'Unknown')
+                    vid = v.get('videoId', '')
+                    thumbs = v.get('thumbnail', {}).get('thumbnails', [{'url': ''}])
+                    thumb = thumbs[0]['url'] if thumbs else ''
+                    if vid and title:
+                        videos.append({
+                            'id': vid,
+                            'title': title,
+                            'channel': {'name': channel},
+                            'link': f'https://www.youtube.com/watch?v={vid}',
+                            'thumbnails': [{'url': thumb}]
+                        })
+                for k, val in obj.items():
+                    extract(val)
+            elif isinstance(obj, list):
+                for item in obj:
+                    extract(item)
+                    
+        extract(data)
+        return videos
+    except Exception as e:
+        print("Fallback search error:", e)
+        return []
+
 def perform_search(query, artist, comment):
     full_query = f"{query} {artist}".strip()
     st.session_state.search_obj = VideosSearch(full_query, limit=5)
-    st.session_state.search_results = st.session_state.search_obj.result()['result']
+    results = st.session_state.search_obj.result().get('result', [])
+    
+    if not results:
+        results = fallback_search(full_query, limit=5)
+        st.session_state.search_obj = None
+        
+    st.session_state.search_results = results
     st.session_state.step = 'results'
     st.session_state.search_query = query
     st.session_state.search_artist = artist
