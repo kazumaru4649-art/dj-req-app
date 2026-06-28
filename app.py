@@ -539,10 +539,11 @@ else:
         st.rerun()
         
     csv_data = get_all_requests_for_download()
+    download_date_str = datetime.now().strftime("%Y%m%d")
     st.download_button(
         label="📥 全てのリクエスト履歴をダウンロード (Excel/CSV)",
         data=csv_data,
-        file_name="song_requests_history.csv",
+        file_name=f"{download_date_str}REQ.csv",
         mime="text/csv",
         use_container_width=True
     )
