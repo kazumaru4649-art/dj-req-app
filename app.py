@@ -308,6 +308,10 @@ if 'search_obj' not in st.session_state:
     st.session_state.search_obj = None
 if 'search_results' not in st.session_state:
     st.session_state.search_results = []
+if 'fallback_all_results' not in st.session_state:
+    st.session_state.fallback_all_results = []
+if 'fallback_index' not in st.session_state:
+    st.session_state.fallback_index = 5
 if 'last_request_time' not in st.session_state:
     st.session_state.last_request_time = 0
 if 'is_admin_logged_in' not in st.session_state:
@@ -363,8 +367,11 @@ def perform_search(query, artist, comment):
     results = st.session_state.search_obj.result().get('result', [])
     
     if not results:
-        results = fallback_search(full_query, limit=5)
+        all_fallback = fallback_search(full_query, limit=30)
         st.session_state.search_obj = None
+        st.session_state.fallback_all_results = all_fallback
+        st.session_state.fallback_index = 5
+        results = all_fallback[:5]
         
     st.session_state.search_results = results
     st.session_state.step = 'results'
@@ -376,6 +383,12 @@ def load_more():
     if st.session_state.search_obj:
         st.session_state.search_obj.next()
         st.session_state.search_results.extend(st.session_state.search_obj.result()['result'])
+    else:
+        idx = st.session_state.fallback_index
+        next_results = st.session_state.fallback_all_results[idx : idx + 5]
+        if next_results:
+            st.session_state.search_results.extend(next_results)
+            st.session_state.fallback_index += 5
 
 def submit_request(handle, title, artist, url, comment):
     add_request(handle, title, artist, url, comment)
@@ -389,6 +402,8 @@ def reset_form():
     st.session_state.search_handle = ''
     st.session_state.search_obj = None
     st.session_state.search_results = []
+    st.session_state.fallback_all_results = []
+    st.session_state.fallback_index = 5
 
 # ==========================================
 # 4. アプリケーション本体
