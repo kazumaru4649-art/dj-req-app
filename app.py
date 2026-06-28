@@ -548,6 +548,21 @@ else:
         use_container_width=True
     )
     
+    try:
+        import os
+        manual_path = os.path.join(os.path.dirname(os.path.abspath(__file__)), "DJリクエストシステム_マニュアル.txt")
+        with open(manual_path, "r", encoding="utf-8") as f:
+            manual_text = f.read()
+        st.download_button(
+            label="📘 システムマニュアルをダウンロード (.txt)",
+            data=manual_text,
+            file_name="DJリクエストシステム_マニュアル.txt",
+            mime="text/plain",
+            use_container_width=True
+        )
+    except FileNotFoundError:
+        pass
+    
     with st.expander("⚙️ NGワード設定（荒らし対策）", expanded=False):
         st.write("現在登録されているNGワード一覧:")
         current_ng_words = get_ng_words()
