@@ -408,45 +408,17 @@ def reset_form():
 # ==========================================
 # 4. アプリケーション本体
 # ==========================================
-st.sidebar.title("DJ Control")
+PIN_CODE = ADMIN_PASSWORD[:4]
 
 if not st.session_state.is_admin_logged_in:
-    current_time = time.time()
-    if current_time < st.session_state.lockout_until:
-        remaining = int(st.session_state.lockout_until - current_time)
-        st.sidebar.error(f"⚠️ 3回間違えたためロックされています。\nあと {remaining}秒 お待ちください。")
-        time.sleep(1)
-        st.rerun()
-    else:
-        if st.session_state.login_failed_count >= 3:
-            st.session_state.login_failed_count = 0
-            
-        admin_password = st.sidebar.text_input("Password", type="password")
-        if st.sidebar.button("🔑 ログイン", use_container_width=True):
-            # 前後の空白を自動で削除して判定を安全にする
-            if admin_password.strip() == ADMIN_PASSWORD:
-                st.session_state.is_admin_logged_in = True
-                st.session_state.login_failed_count = 0
-                st.session_state.lockout_until = 0
-                st.rerun()
-            else:
-                st.session_state.login_failed_count += 1
-                if st.session_state.login_failed_count >= 3:
-                    st.session_state.lockout_until = time.time() + 60
-                    st.sidebar.error("⚠️ 3回間違えたため、1分間ロックされます。")
-                else:
-                    st.sidebar.error(f"パスワードが違います。(残り {3 - st.session_state.login_failed_count} 回)")
-        
-        st.sidebar.divider()
-        st.sidebar.write("※パスワードが弾かれる場合")
-        if st.sidebar.button("📧 パスワードを再送信する", use_container_width=True):
-            # キャッシュをクリアして強制的に新しいパスワードを作り直させる
-            get_daily_password_and_notify.clear()
-            st.sidebar.success("新しいパスワードを作成し、メールへ送信しました！")
-            time.sleep(2)
-            st.rerun()
-
-if not st.session_state.is_admin_logged_in:
+    # 一般ユーザーにはサイドバー展開ボタン(>>)を完全に隠すCSSを適用
+    st.markdown("""
+    <style>
+        [data-testid="collapsedControl"] { display: none !important; }
+        [data-testid="stSidebar"] { display: none !important; }
+    </style>
+    """, unsafe_allow_html=True)
+    
     # ---------- 一般ユーザー画面 ----------
     st.title("🎵 曲リクエスト")
     
@@ -530,8 +502,45 @@ if not st.session_state.is_admin_logged_in:
             reset_form()
             st.rerun()
 
+    # --- 管理者ログインエリア (ページ最下部: QRコード経由でのみ表示) ---
+    if st.query_params.get("admin") == "777":
+        st.divider()
+        with st.expander("⚙️ 管理者専用", expanded=False):
+            current_time = time.time()
+            if current_time < st.session_state.lockout_until:
+                remaining = int(st.session_state.lockout_until - current_time)
+                st.error(f"⚠️ ロックされています。\nあと {remaining}秒 お待ちください。")
+                time.sleep(1)
+                st.rerun()
+            else:
+                if st.session_state.login_failed_count >= 3:
+                    st.session_state.login_failed_count = 0
+                    
+                admin_password = st.text_input("4桁のPINコードを入力", type="password", key="pin_login")
+                if st.button("🔑 ログイン", use_container_width=True):
+                    if admin_password.strip() == PIN_CODE:
+                        st.session_state.is_admin_logged_in = True
+                        st.session_state.login_failed_count = 0
+                        st.session_state.lockout_until = 0
+                        st.rerun()
+                    else:
+                        st.session_state.login_failed_count += 1
+                        if st.session_state.login_failed_count >= 3:
+                            st.session_state.lockout_until = time.time() + 60
+                            st.error("⚠️ 3回間違えたため、1分間ロックされます。")
+                        else:
+                            st.error(f"PINコードが違います。(残り {3 - st.session_state.login_failed_count} 回)")
+                
+                st.write("※パスワード再送信")
+                if st.button("📧 新しいパスワードをメール送信", use_container_width=True):
+                    get_daily_password_and_notify.clear()
+                    st.success("新しいパスワードをメールへ送信しました！")
+                    time.sleep(2)
+                    st.rerun()
+
 else:
     # ---------- DJ用 管理者画面 ----------
+    st.sidebar.title("DJ Control")
     st.title("🎧 DJ Panel")
     
     if st.sidebar.button("🚪 ログアウト", use_container_width=True):
