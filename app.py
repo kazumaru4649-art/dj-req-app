@@ -299,7 +299,8 @@ if not st.session_state.is_admin_logged_in:
             
         admin_password = st.sidebar.text_input("Password", type="password")
         if st.sidebar.button("🔑 ログイン", use_container_width=True):
-            if admin_password == ADMIN_PASSWORD:
+            # 前後の空白を自動で削除して判定を安全にする
+            if admin_password.strip() == ADMIN_PASSWORD:
                 st.session_state.is_admin_logged_in = True
                 st.session_state.login_failed_count = 0
                 st.session_state.lockout_until = 0
@@ -311,6 +312,15 @@ if not st.session_state.is_admin_logged_in:
                     st.sidebar.error("⚠️ 3回間違えたため、1分間ロックされます。")
                 else:
                     st.sidebar.error(f"パスワードが違います。(残り {3 - st.session_state.login_failed_count} 回)")
+        
+        st.sidebar.divider()
+        st.sidebar.write("※パスワードが弾かれる場合")
+        if st.sidebar.button("📧 パスワードを再送信する", use_container_width=True):
+            # キャッシュをクリアして強制的に新しいパスワードを作り直させる
+            get_daily_password_and_notify.clear()
+            st.sidebar.success("新しいパスワードを作成し、メールへ送信しました！")
+            time.sleep(2)
+            st.rerun()
 
 if not st.session_state.is_admin_logged_in:
     # ---------- 一般ユーザー画面 ----------
