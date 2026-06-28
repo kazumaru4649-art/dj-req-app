@@ -140,6 +140,46 @@ def init_db():
         c.execute("ALTER TABLE song_requests ADD COLUMN comment TEXT DEFAULT ''")
     except sqlite3.OperationalError:
         pass
+    c.execute('''
+        CREATE TABLE IF NOT EXISTS ng_words (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            word TEXT NOT NULL UNIQUE
+        )
+    ''')
+    c.execute("SELECT COUNT(*) FROM ng_words")
+    if c.fetchone()[0] == 0:
+        initial_words = ["ばか", "あほ", "死ね", "殺す", "うんこ", "ちんこ", "アホ", "バカ", "カス", "ゴミ", "クソ"]
+        for word in initial_words:
+            c.execute("INSERT OR IGNORE INTO ng_words (word) VALUES (?)", (word,))
+            
+    conn.commit()
+    conn.close()
+
+def get_ng_words():
+    conn = sqlite3.connect(DB_FILE)
+    c = conn.cursor()
+    c.execute("SELECT id, word FROM ng_words ORDER BY id DESC")
+    rows = c.fetchall()
+    conn.close()
+    return rows
+
+def add_ng_word(word):
+    if not word.strip(): return False
+    conn = sqlite3.connect(DB_FILE)
+    c = conn.cursor()
+    try:
+        c.execute("INSERT INTO ng_words (word) VALUES (?)", (word.strip(),))
+        conn.commit()
+        success = True
+    except sqlite3.IntegrityError:
+        success = False
+    conn.close()
+    return success
+
+def delete_ng_word(word_id):
+    conn = sqlite3.connect(DB_FILE)
+    c = conn.cursor()
+    c.execute("DELETE FROM ng_words WHERE id = ?", (word_id,))
     conn.commit()
     conn.close()
 
@@ -240,7 +280,9 @@ today_str = datetime.now().strftime("%Y-%m-%d")
 ADMIN_PASSWORD = get_daily_password_and_notify(today_str)
 
 def contains_ng_word(text):
-    for word in NG_WORDS:
+    if not text: return False
+    ng_words_list = get_ng_words()
+    for _, word in ng_words_list:
         if word in text:
             return True
     return False
@@ -439,6 +481,34 @@ else:
         mime="text/csv",
         use_container_width=True
     )
+    
+    with st.expander("⚙️ NGワード設定（荒らし対策）", expanded=False):
+        st.write("現在登録されているNGワード一覧:")
+        current_ng_words = get_ng_words()
+        
+        if not current_ng_words:
+            st.info("NGワードは登録されていません。")
+            
+        for ng_id, ng_word in current_ng_words:
+            c1, c2 = st.columns([4, 1])
+            with c1:
+                st.write(f"🚫 {ng_word}")
+            with c2:
+                if st.button("🗑️", key=f"del_ng_{ng_id}", use_container_width=True):
+                    delete_ng_word(ng_id)
+                    st.rerun()
+        
+        st.divider()
+        new_ng_word = st.text_input("新しいNGワードを追加", key="new_ng_word_input")
+        if st.button("➕ NGワードを追加", use_container_width=True):
+            if new_ng_word:
+                if add_ng_word(new_ng_word):
+                    st.success(f"「{new_ng_word}」をNGワードに追加しました。")
+                    time.sleep(1)
+                    st.rerun()
+                else:
+                    st.warning("その言葉はすでに登録されています。")
+    
     st.divider()
     
     admin_view = st.radio("表示するリスト", ["未プレイ (新着)", "プレイ済 (履歴)"], horizontal=True)
