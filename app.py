@@ -66,6 +66,12 @@ components.html("""
 
 st.markdown("""
 <style>
+    /* 右上の不要なボタン（Share, GitHubなど）とヘッダーを非表示 */
+    [data-testid="stHeader"], [data-testid="stToolbar"], #MainMenu, footer {
+        display: none !important;
+        visibility: hidden !important;
+    }
+    
     .stTextInput>div>div>input {
         font-size: 18px !important;
         padding: 12px !important;
