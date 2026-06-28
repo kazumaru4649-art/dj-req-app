@@ -249,6 +249,12 @@ if 'search_results' not in st.session_state:
     st.session_state.search_results = []
 if 'last_request_time' not in st.session_state:
     st.session_state.last_request_time = 0
+if 'is_admin_logged_in' not in st.session_state:
+    st.session_state.is_admin_logged_in = False
+if 'login_failed_count' not in st.session_state:
+    st.session_state.login_failed_count = 0
+if 'lockout_until' not in st.session_state:
+    st.session_state.lockout_until = 0
 
 def perform_search(query, artist):
     full_query = f"{query} {artist}".strip()
@@ -279,9 +285,29 @@ def reset_form():
 # 4. アプリケーション本体
 # ==========================================
 st.sidebar.title("DJ Control")
-admin_password = st.sidebar.text_input("Password", type="password")
 
-if admin_password != ADMIN_PASSWORD:
+if not st.session_state.is_admin_logged_in:
+    current_time = time.time()
+    if current_time < st.session_state.lockout_until:
+        remaining = int(st.session_state.lockout_until - current_time)
+        st.sidebar.error(f"⚠️ 3回間違えたためロックされています。\nあと {remaining}秒 お待ちください。")
+    else:
+        admin_password = st.sidebar.text_input("Password", type="password")
+        if st.sidebar.button("🔑 ログイン", use_container_width=True):
+            if admin_password == ADMIN_PASSWORD:
+                st.session_state.is_admin_logged_in = True
+                st.session_state.login_failed_count = 0
+                st.session_state.lockout_until = 0
+                st.rerun()
+            else:
+                st.session_state.login_failed_count += 1
+                if st.session_state.login_failed_count >= 3:
+                    st.session_state.lockout_until = time.time() + 60
+                    st.sidebar.error("⚠️ 3回間違えたため、1分間ロックされます。")
+                else:
+                    st.sidebar.error(f"パスワードが違います。(残り {3 - st.session_state.login_failed_count} 回)")
+
+if not st.session_state.is_admin_logged_in:
     # ---------- 一般ユーザー画面 ----------
     st.title("🎵 曲リクエスト")
     
@@ -367,6 +393,10 @@ else:
     # ---------- DJ用 管理者画面 ----------
     st.title("🎧 DJ Panel")
     
+    if st.sidebar.button("🚪 ログアウト", use_container_width=True):
+        st.session_state.is_admin_logged_in = False
+        st.rerun()
+        
     csv_data = get_all_requests_for_download()
     st.download_button(
         label="📥 全てのリクエスト履歴をダウンロード (Excel/CSV)",
