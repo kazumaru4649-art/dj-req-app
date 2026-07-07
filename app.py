@@ -260,9 +260,8 @@ init_db()
 # ==========================================
 @st.cache_resource
 def get_daily_password_and_notify(date_str):
-    """日替わりパスワードを生成し、Gmail経由で管理者に送信する"""
-    new_num = f"{random.randint(0, 9999):04d}"
-    daily_pw = f"{new_num}disco"
+    """日替わりパスワード(数字4桁)を生成し、Gmail経由で管理者に送信する"""
+    daily_pw = f"{random.randint(0, 9999):04d}"
     
     try:
         if "email" in st.secrets:
@@ -537,12 +536,16 @@ if not st.session_state.is_admin_logged_in:
                         else:
                             st.error(f"PINコードが違います。(残り {3 - st.session_state.login_failed_count} 回)")
                 
-                st.write("※パスワード再送信")
+                st.write("※パスワード再送信 (店長・責任者用)")
+                resend_pw = st.text_input("再送信用 固定パスワード(4桁)を入力", type="password", key="resend_pw_input")
                 if st.button("📧 新しいパスワードをメール送信", use_container_width=True):
-                    get_daily_password_and_notify.clear()
-                    st.success("新しいパスワードをメールへ送信しました！")
-                    time.sleep(2)
-                    st.rerun()
+                    if resend_pw == "1030":
+                        get_daily_password_and_notify.clear()
+                        st.success("新しいパスワードをメールへ送信しました！")
+                        time.sleep(2)
+                        st.rerun()
+                    else:
+                        st.error("固定パスワードが違います")
 
 else:
     # ---------- DJ用 管理者画面 ----------
