@@ -424,6 +424,50 @@ if not st.session_state.is_admin_logged_in:
     </style>
     """, unsafe_allow_html=True)
     
+    # --- 管理者ログイン専用画面 (?admin=777 の場合) ---
+    if st.query_params.get("admin") == "777":
+        st.title("🎧 DJ Login")
+        st.write("パスワードを入力してDJパネルを開きます。")
+        
+        current_time = time.time()
+        if current_time < st.session_state.lockout_until:
+            remaining = int(st.session_state.lockout_until - current_time)
+            st.error(f"⚠️ ロックされています。\nあと {remaining}秒 お待ちください。")
+            time.sleep(1)
+            st.rerun()
+        else:
+            if st.session_state.login_failed_count >= 3:
+                st.session_state.login_failed_count = 0
+                
+            admin_password = st.text_input("4桁のPINコードを入力", type="password", key="pin_login")
+            if st.button("🔑 ログイン", use_container_width=True):
+                if admin_password.strip() == PIN_CODE:
+                    st.session_state.is_admin_logged_in = True
+                    st.session_state.login_failed_count = 0
+                    st.session_state.lockout_until = 0
+                    st.rerun()
+                else:
+                    st.session_state.login_failed_count += 1
+                    if st.session_state.login_failed_count >= 3:
+                        st.session_state.lockout_until = time.time() + 60
+                        st.error("⚠️ 3回間違えたため、1分間ロックされます。")
+                    else:
+                        st.error(f"PINコードが違います。(残り {3 - st.session_state.login_failed_count} 回)")
+            
+            st.divider()
+            st.write("※パスワード再送信 (店長・責任者用)")
+            resend_pw = st.text_input("再送信用 固定パスワード(4桁)を入力", type="password", key="resend_pw_input")
+            if st.button("📧 新しいパスワードをメール送信", use_container_width=True):
+                if resend_pw == "1030":
+                    get_daily_password_and_notify.clear()
+                    st.success("新しいパスワードをメールへ送信しました！")
+                    time.sleep(2)
+                    st.rerun()
+                else:
+                    st.error("固定パスワードが違います")
+                    
+        st.stop()  # ログイン画面の場合はここで処理を終了し、下の一般ユーザー画面を表示しない
+        
     # ---------- 一般ユーザー画面 ----------
     st.title("🎵 曲リクエスト")
     
@@ -507,45 +551,7 @@ if not st.session_state.is_admin_logged_in:
             reset_form()
             st.rerun()
 
-    # --- 管理者ログインエリア (ページ最下部: QRコード経由でのみ表示) ---
-    if st.query_params.get("admin") == "777":
-        st.divider()
-        with st.expander("⚙️ 管理者専用", expanded=False):
-            current_time = time.time()
-            if current_time < st.session_state.lockout_until:
-                remaining = int(st.session_state.lockout_until - current_time)
-                st.error(f"⚠️ ロックされています。\nあと {remaining}秒 お待ちください。")
-                time.sleep(1)
-                st.rerun()
-            else:
-                if st.session_state.login_failed_count >= 3:
-                    st.session_state.login_failed_count = 0
-                    
-                admin_password = st.text_input("4桁のPINコードを入力", type="password", key="pin_login")
-                if st.button("🔑 ログイン", use_container_width=True):
-                    if admin_password.strip() == PIN_CODE:
-                        st.session_state.is_admin_logged_in = True
-                        st.session_state.login_failed_count = 0
-                        st.session_state.lockout_until = 0
-                        st.rerun()
-                    else:
-                        st.session_state.login_failed_count += 1
-                        if st.session_state.login_failed_count >= 3:
-                            st.session_state.lockout_until = time.time() + 60
-                            st.error("⚠️ 3回間違えたため、1分間ロックされます。")
-                        else:
-                            st.error(f"PINコードが違います。(残り {3 - st.session_state.login_failed_count} 回)")
-                
-                st.write("※パスワード再送信 (店長・責任者用)")
-                resend_pw = st.text_input("再送信用 固定パスワード(4桁)を入力", type="password", key="resend_pw_input")
-                if st.button("📧 新しいパスワードをメール送信", use_container_width=True):
-                    if resend_pw == "1030":
-                        get_daily_password_and_notify.clear()
-                        st.success("新しいパスワードをメールへ送信しました！")
-                        time.sleep(2)
-                        st.rerun()
-                    else:
-                        st.error("固定パスワードが違います")
+
 
 else:
     # ---------- DJ用 管理者画面 ----------
