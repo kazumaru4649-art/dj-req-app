@@ -121,16 +121,6 @@ st.markdown("""
         color: #b3b3b3;
         margin-bottom: 15px;
     }
-    /* DJパネル用: ヘッダー行をスクロール時に上部固定するCSSハック */
-    .element-container:has(.sticky-header-anchor) + .element-container {
-        position: sticky !important;
-        top: 0px !important;
-        z-index: 9999 !important;
-        background-color: #1e1e1e !important;
-        padding-top: 10px !important;
-        padding-bottom: 5px !important;
-        border-bottom: 2px solid #1DB954 !important;
-    }
 </style>
 """, unsafe_allow_html=True)
 
@@ -709,3 +699,28 @@ else:
                         st.rerun()
                 
                 st.divider()
+
+    # --- ヘッダー上部固定用 JavaScript (全ブラウザ対応) ---
+    components.html("""
+    <script>
+        const setSticky = () => {
+            const anchors = window.parent.document.querySelectorAll('.sticky-header-anchor');
+            anchors.forEach(anchor => {
+                let container = anchor.closest('.element-container');
+                if (container && container.nextElementSibling) {
+                    let target = container.nextElementSibling;
+                    target.style.position = 'sticky';
+                    target.style.top = '0px';
+                    target.style.zIndex = '9999';
+                    target.style.backgroundColor = '#1e1e1e';
+                    target.style.borderBottom = '2px solid #1DB954';
+                    target.style.paddingTop = '10px';
+                    target.style.paddingBottom = '10px';
+                }
+            });
+        };
+        const observer = new MutationObserver(setSticky);
+        observer.observe(window.parent.document.body, { childList: true, subtree: true });
+        setTimeout(setSticky, 100);
+    </script>
+    """, height=0, width=0)
