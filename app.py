@@ -624,31 +624,42 @@ else:
         
         if not requests:
             st.info("現在、保留中のリクエストはありません。")
-        
-        for req in requests:
-            req_id, timestamp, handle, title, artist, url, comment = req
-            
-            url_html = f'<div style="margin-top: 10px; font-size: 14px; word-break: break-all;"><a href="{url}" target="_blank" style="color: #1DB954;">🔗 YouTube URL: {url}</a></div>' if url else ""
-            
-            st.markdown(f"""
-            <div class="request-card">
-                <div class="request-title">{title}</div>
-                <div class="request-artist">👤 {artist}</div>
-                {url_html}
-            </div>
-            """, unsafe_allow_html=True)
-                    
-            col1, col2 = st.columns(2)
-            with col1:
-                if st.button("▶️ プレイ済", key=f"play_{req_id}", use_container_width=True):
-                    update_status(req_id, 'Played')
-                    st.rerun()
-            with col2:
-                if st.button("🗑️ アーカイブ", key=f"arch_{req_id}", use_container_width=True):
-                    update_status(req_id, 'Archived')
-                    st.rerun()
-                    
+        else:
+            # テーブルのヘッダー部分
+            hc1, hc2, hc3, hc4, hc5, hc6 = st.columns([1.5, 2, 1.5, 2, 1, 1.5])
+            hc1.write("**📛 依頼者**")
+            hc2.write("**🎵 曲名**")
+            hc3.write("**👤 歌手**")
+            hc4.write("**💬 コメント**")
+            hc5.write("**🔗 リンク**")
+            hc6.write("**⚙️ 操作**")
             st.divider()
+            
+            for req in requests:
+                req_id, timestamp, handle, title, artist, url, comment = req
+                
+                c1, c2, c3, c4, c5, c6 = st.columns([1.5, 2, 1.5, 2, 1, 1.5])
+                c1.write(handle)
+                c2.write(title)
+                c3.write(artist)
+                c4.write(comment)
+                
+                with c5:
+                    if url:
+                        st.markdown(f'<a href="{url}" target="_blank" style="color: #1DB954; font-weight: bold;">YouTube</a>', unsafe_allow_html=True)
+                
+                with c6:
+                    bc1, bc2 = st.columns(2)
+                    with bc1:
+                        if st.button("▶️", key=f"play_{req_id}", help="プレイ済にする", use_container_width=True):
+                            update_status(req_id, 'Played')
+                            st.rerun()
+                    with bc2:
+                        if st.button("🗑️", key=f"arch_{req_id}", help="削除(アーカイブ)", use_container_width=True):
+                            update_status(req_id, 'Archived')
+                            st.rerun()
+                
+                st.divider()
             
     else:
         st.write("プレイ済みのリクエスト履歴")
@@ -656,22 +667,33 @@ else:
         
         if not requests:
             st.info("プレイ済みの履歴はありません。")
-            
-        for req in requests:
-            req_id, timestamp, handle, title, artist, url, comment = req
-            
-            url_html = f'<div style="margin-top: 10px; font-size: 14px; word-break: break-all;"><a href="{url}" target="_blank" style="color: #1DB954;">🔗 YouTube URL: {url}</a></div>' if url else ""
-            
-            st.markdown(f"""
-            <div class="request-card" style="border-left-color: #555555;">
-                <div class="request-title">{title}</div>
-                <div class="request-artist">👤 {artist}</div>
-                {url_html}
-            </div>
-            """, unsafe_allow_html=True)
-            
-            if st.button("↩️ 未プレイに戻す (誤操作の取消)", key=f"undo_{req_id}", use_container_width=True):
-                update_status(req_id, 'Pending')
-                st.rerun()
-                
+        else:
+            # テーブルのヘッダー部分
+            hc1, hc2, hc3, hc4, hc5, hc6 = st.columns([1.5, 2, 1.5, 2, 1, 1.5])
+            hc1.write("**📛 依頼者**")
+            hc2.write("**🎵 曲名**")
+            hc3.write("**👤 歌手**")
+            hc4.write("**💬 コメント**")
+            hc5.write("**🔗 リンク**")
+            hc6.write("**⚙️ 操作**")
             st.divider()
+            
+            for req in requests:
+                req_id, timestamp, handle, title, artist, url, comment = req
+                
+                c1, c2, c3, c4, c5, c6 = st.columns([1.5, 2, 1.5, 2, 1, 1.5])
+                c1.write(handle)
+                c2.write(title)
+                c3.write(artist)
+                c4.write(comment)
+                
+                with c5:
+                    if url:
+                        st.markdown(f'<a href="{url}" target="_blank" style="color: #555555; font-weight: bold;">YouTube</a>', unsafe_allow_html=True)
+                
+                with c6:
+                    if st.button("↩️ 戻す", key=f"undo_{req_id}", help="未プレイに戻す", use_container_width=True):
+                        update_status(req_id, 'Pending')
+                        st.rerun()
+                
+                st.divider()
