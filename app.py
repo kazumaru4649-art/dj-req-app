@@ -508,7 +508,7 @@ if not st.session_state.is_admin_logged_in:
             col1, col2 = st.columns([1, 1.5])
             with col1:
                 if thumb_url:
-                    st.image(thumb_url, use_column_width=True)
+                    st.image(thumb_url, use_container_width=True)
             with col2:
                 st.markdown(f'<div class="yt-title">{title}</div>', unsafe_allow_html=True)
                 st.markdown(f'<div class="yt-channel">{channel}</div>', unsafe_allow_html=True)
