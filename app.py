@@ -628,22 +628,15 @@ else:
         for req in requests:
             req_id, timestamp, handle, title, artist, url, comment = req
             
-            comment_html = f'<div style="background-color: #333; padding: 10px; border-radius: 5px; margin-top: 10px; font-size: 14px;">💬 {comment}</div>' if comment else ""
+            url_html = f'<div style="margin-top: 10px; font-size: 14px; word-break: break-all;"><a href="{url}" target="_blank" style="color: #1DB954;">🔗 YouTube URL: {url}</a></div>' if url else ""
             
             st.markdown(f"""
             <div class="request-card">
                 <div class="request-title">{title}</div>
                 <div class="request-artist">👤 {artist}</div>
-                <div class="request-meta">📛 依頼者: {handle} &nbsp;|&nbsp; 🕒 {timestamp}</div>
-                {comment_html}
+                {url_html}
             </div>
             """, unsafe_allow_html=True)
-            
-            if url and ("youtube.com" in url or "youtu.be" in url):
-                try:
-                    st.video(url)
-                except Exception:
-                    st.warning("動画の読み込みに失敗しました。")
                     
             col1, col2 = st.columns(2)
             with col1:
@@ -667,14 +660,13 @@ else:
         for req in requests:
             req_id, timestamp, handle, title, artist, url, comment = req
             
-            comment_html = f'<div style="background-color: #333; padding: 10px; border-radius: 5px; margin-top: 10px; font-size: 14px;">💬 {comment}</div>' if comment else ""
+            url_html = f'<div style="margin-top: 10px; font-size: 14px; word-break: break-all;"><a href="{url}" target="_blank" style="color: #1DB954;">🔗 YouTube URL: {url}</a></div>' if url else ""
             
             st.markdown(f"""
             <div class="request-card" style="border-left-color: #555555;">
                 <div class="request-title">{title}</div>
                 <div class="request-artist">👤 {artist}</div>
-                <div class="request-meta">📛 依頼者: {handle} &nbsp;|&nbsp; 🕒 {timestamp}</div>
-                {comment_html}
+                {url_html}
             </div>
             """, unsafe_allow_html=True)
             
