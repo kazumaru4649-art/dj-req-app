@@ -10,6 +10,7 @@ import urllib.request
 import urllib.parse
 import re
 import json
+import pandas as pd
 
 NG_WORDS = ["ばか", "あほ", "死ね", "殺す", "うんこ", "ちんこ", "アホ", "バカ", "カス", "ゴミ", "クソ"]
 import httpx
@@ -70,6 +71,20 @@ st.markdown("""
     [data-testid="stHeader"], [data-testid="stToolbar"], #MainMenu, footer {
         display: none !important;
         visibility: hidden !important;
+    }
+    
+    /* 右下のDeployボタンや赤いバッジを非表示（より強力な設定） */
+    .stDeployButton, [data-testid="stDeployButton"] {
+        display: none !important;
+        visibility: hidden !important;
+    }
+    div[class*="viewerBadge"] {
+        display: none !important;
+        opacity: 0 !important;
+        pointer-events: none !important;
+    }
+    a[href*="streamlit.io/cloud"] {
+        display: none !important;
     }
     
     .stTextInput>div>div>input {
@@ -232,10 +247,10 @@ def get_all_requests_for_download():
     rows = c.fetchall()
     conn.close()
     
-    csv_text = "リクエスト日時,ハンドルネーム,曲名,アーティスト名,コメント,ステータス,YouTubeリンク\n"
+    csv_text = "リクエスト日時,ハンドルネーム,曲名,アーティスト名,コメント,ステータス,YouTubeリンク\\n"
     for r in rows:
         row_data = [str(x).replace(',', '，') for x in r]
-        csv_text += ",".join(row_data) + "\n"
+        csv_text += ",".join(row_data) + "\\n"
     return csv_text.encode('utf-8-sig')
 
 def update_status(req_id, new_status):
@@ -248,7 +263,7 @@ def update_status(req_id, new_status):
 def check_rate_limit_db(handle_name):
     conn = sqlite3.connect(DB_FILE)
     c = conn.cursor()
-    c.execute("SELECT COUNT(*) FROM song_requests WHERE handle_name = ? AND timestamp >= datetime('now', '-3 minutes')", (handle_name,))
+    c.execute("SELECT COUNT(*) FROM song_requests WHERE handle_name = ? AND timestamp >= datetime('now', '-1 minutes')", (handle_name,))
     count = c.fetchone()[0]
     conn.close()
     return count > 0
@@ -260,7 +275,6 @@ init_db()
 # ==========================================
 @st.cache_resource
 def get_daily_password_and_notify(date_str):
-    """日替わりパスワード(数字4桁)を生成し、Gmail経由で管理者に送信する"""
     daily_pw = f"{random.randint(0, 9999):04d}"
     
     try:
@@ -268,13 +282,20 @@ def get_daily_password_and_notify(date_str):
             sender_email = st.secrets["email"]["sender"]
             app_password = st.secrets["email"]["password"]
             receiver_email = st.secrets["email"]["receiver"]
+            smtp_server = st.secrets["email"].get("smtp_server", "smtp.gmail.com")
+            smtp_port = st.secrets["email"].get("smtp_port", 465)
             
-            msg = MIMEText(f"本日のDJパネル パスワードは【 {daily_pw} 】です。\n不正アクセスを防ぐため、他者には教えないでください。")
+            msg = MIMEText(f"本日のDJパネル パスワードは【 {daily_pw} 】です。\\n不正アクセスを防ぐため、他者には教えないでください。")
             msg['Subject'] = f"【DJアプリ】本日のパスワード ({date_str})"
             msg['From'] = sender_email
             msg['To'] = receiver_email
             
-            server = smtplib.SMTP_SSL('smtp.gmail.com', 465)
+            if smtp_port == 465:
+                server = smtplib.SMTP_SSL(smtp_server, 465)
+            else:
+                server = smtplib.SMTP(smtp_server, smtp_port)
+                server.starttls()
+                
             server.login(sender_email, app_password)
             server.send_message(msg)
             server.quit()
@@ -297,7 +318,7 @@ def contains_ng_word(text):
     return False
 
 # ==========================================
-# 3. セッションステート管理（状態の保持）
+# 3. セッションステート管理
 # ==========================================
 if 'step' not in st.session_state:
     st.session_state.step = 'input'
@@ -363,7 +384,6 @@ def fallback_search(query, limit=5):
         extract(data)
         return videos
     except Exception as e:
-        print("Fallback search error:", e)
         return []
 
 def perform_search(query, artist, comment):
@@ -416,7 +436,6 @@ def reset_form():
 PIN_CODE = ADMIN_PASSWORD[:4]
 
 if not st.session_state.is_admin_logged_in:
-    # 一般ユーザーにはサイドバー展開ボタン(>>)を完全に隠すCSSを適用
     st.markdown("""
     <style>
         [data-testid="collapsedControl"] { display: none !important; }
@@ -424,7 +443,6 @@ if not st.session_state.is_admin_logged_in:
     </style>
     """, unsafe_allow_html=True)
     
-    # --- 管理者ログイン専用画面 (?admin=777 の場合) ---
     if st.query_params.get("admin") == "777":
         st.title("🎧 DJ Login")
         st.write("パスワードを入力してDJパネルを開きます。")
@@ -432,7 +450,7 @@ if not st.session_state.is_admin_logged_in:
         current_time = time.time()
         if current_time < st.session_state.lockout_until:
             remaining = int(st.session_state.lockout_until - current_time)
-            st.error(f"⚠️ ロックされています。\nあと {remaining}秒 お待ちください。")
+            st.error(f"⚠️ ロックされています。\\nあと {remaining}秒 お待ちください。")
             time.sleep(1)
             st.rerun()
         else:
@@ -466,9 +484,8 @@ if not st.session_state.is_admin_logged_in:
                 else:
                     st.error("固定パスワードが違います")
                     
-        st.stop()  # ログイン画面の場合はここで処理を終了し、下の一般ユーザー画面を表示しない
+        st.stop()
         
-    # ---------- 一般ユーザー画面 ----------
     st.title("🎵 曲リクエスト")
     
     if st.session_state.step == 'input':
@@ -518,14 +535,14 @@ if not st.session_state.is_admin_logged_in:
                     comment = st.session_state.search_comment
                     
                     if contains_ng_word(handle) or contains_ng_word(title) or contains_ng_word(final_artist) or contains_ng_word(comment):
-                        st.error("不適切な表現が含まれているため送信できません。入力内容を見直してください。")
+                        st.error("不適切な表現が含まれているため送信できません。")
                     else:
                         current_time = time.time()
                         time_diff = current_time - st.session_state.last_request_time
                         
-                        if time_diff < 180 or check_rate_limit_db(handle):
-                            remaining = int(180 - time_diff) if time_diff < 180 else 180
-                            st.warning(f"連投は制限されています。あと約{remaining}秒お待ちいただくか、時間をおいて再度お試しください。")
+                        if time_diff < 60 or check_rate_limit_db(handle):
+                            remaining = int(60 - time_diff) if time_diff < 60 else 60
+                            st.warning(f"連投は制限されています。あと約{remaining}秒お待ちください。")
                         else:
                             submit_request(handle, title, final_artist, url, comment)
                             st.session_state.last_request_time = time.time()
@@ -550,8 +567,6 @@ if not st.session_state.is_admin_logged_in:
         if st.button("🔄 続けて別の曲をリクエストする", use_container_width=True):
             reset_form()
             st.rerun()
-
-
 
 else:
     # ---------- DJ用 管理者画面 ----------
@@ -618,109 +633,53 @@ else:
     
     admin_view = st.radio("表示するリスト", ["未プレイ (新着)", "プレイ済 (履歴)"], horizontal=True)
     
+    st.write("💡 表のセルをダブルクリックして直接編集できます。（行の追加・削除も可能）")
+    st.write("※ステータスを変更した場合は、表の下にある「変更を保存」ボタンを押してください。")
+    
     if admin_view == "未プレイ (新着)":
-        st.write("新着リクエスト一覧")
         requests = get_pending_requests()
-        
-        if not requests:
-            st.info("現在、保留中のリクエストはありません。")
-        else:
-            # テーブルのヘッダー部分
-            st.markdown('<div class="sticky-header-anchor"></div>', unsafe_allow_html=True)
-            hc1, hc2, hc3, hc4, hc5, hc6 = st.columns([1.5, 2, 1.5, 2, 1, 1.5])
-            hc1.write("**📛 依頼者**")
-            hc2.write("**🎵 曲名**")
-            hc3.write("**👤 歌手**")
-            hc4.write("**💬 コメント**")
-            hc5.write("**🔗 リンク**")
-            hc6.write("**⚙️ 操作**")
-            st.divider()
-            
-            for req in requests:
-                req_id, timestamp, handle, title, artist, url, comment = req
-                
-                c1, c2, c3, c4, c5, c6 = st.columns([1.5, 2, 1.5, 2, 1, 1.5])
-                c1.write(handle)
-                c2.write(title)
-                c3.write(artist)
-                c4.write(comment)
-                
-                with c5:
-                    if url:
-                        st.markdown(f'<a href="{url}" target="_blank" style="color: #1DB954; font-weight: bold;">YouTube</a>', unsafe_allow_html=True)
-                
-                with c6:
-                    bc1, bc2 = st.columns(2)
-                    with bc1:
-                        if st.button("▶️", key=f"play_{req_id}", help="プレイ済にする", use_container_width=True):
-                            update_status(req_id, 'Played')
-                            st.rerun()
-                    with bc2:
-                        if st.button("🗑️", key=f"arch_{req_id}", help="削除(アーカイブ)", use_container_width=True):
-                            update_status(req_id, 'Archived')
-                            st.rerun()
-                
-                st.divider()
-            
     else:
-        st.write("プレイ済みのリクエスト履歴")
         requests = get_played_requests()
         
-        if not requests:
-            st.info("プレイ済みの履歴はありません。")
-        else:
-            # テーブルのヘッダー部分
-            st.markdown('<div class="sticky-header-anchor"></div>', unsafe_allow_html=True)
-            hc1, hc2, hc3, hc4, hc5, hc6 = st.columns([1.5, 2, 1.5, 2, 1, 1.5])
-            hc1.write("**📛 依頼者**")
-            hc2.write("**🎵 曲名**")
-            hc3.write("**👤 歌手**")
-            hc4.write("**💬 コメント**")
-            hc5.write("**🔗 リンク**")
-            hc6.write("**⚙️ 操作**")
-            st.divider()
-            
-            for req in requests:
-                req_id, timestamp, handle, title, artist, url, comment = req
+    if not requests:
+        st.info("データがありません。")
+    else:
+        # データベースの結果をPandasのDataFrameに変換
+        df = pd.DataFrame(requests, columns=["ID", "リクエスト日時", "依頼者", "曲名", "歌手", "YouTubeリンク", "コメント"])
+        df["ステータス"] = "未プレイ" if admin_view == "未プレイ (新着)" else "プレイ済"
+        
+        # カラムの詳細設定
+        config = {
+            "ID": st.column_config.NumberColumn("ID", disabled=True, width="small"),
+            "リクエスト日時": st.column_config.TextColumn("日時", disabled=True),
+            "YouTubeリンク": st.column_config.LinkColumn("YouTubeリンク", display_text="開く"),
+            "ステータス": st.column_config.SelectboxColumn(
+                "ステータス",
+                options=["未プレイ", "プレイ済", "削除(アーカイブ)"],
+                required=True,
+                width="medium"
+            )
+        }
+        
+        # Excel風のデータエディタを表示
+        edited_df = st.data_editor(df, column_config=config, use_container_width=True, hide_index=True)
+        
+        # 変更保存ボタン
+        if st.button("💾 ステータスの変更を保存", use_container_width=True):
+            changed = False
+            for index, row in edited_df.iterrows():
+                orig_status = df.at[index, "ステータス"]
+                new_status = row["ステータス"]
                 
-                c1, c2, c3, c4, c5, c6 = st.columns([1.5, 2, 1.5, 2, 1, 1.5])
-                c1.write(handle)
-                c2.write(title)
-                c3.write(artist)
-                c4.write(comment)
-                
-                with c5:
-                    if url:
-                        st.markdown(f'<a href="{url}" target="_blank" style="color: #555555; font-weight: bold;">YouTube</a>', unsafe_allow_html=True)
-                
-                with c6:
-                    if st.button("↩️ 戻す", key=f"undo_{req_id}", help="未プレイに戻す", use_container_width=True):
-                        update_status(req_id, 'Pending')
-                        st.rerun()
-                
-                st.divider()
-
-    # --- ヘッダー上部固定用 JavaScript (全ブラウザ対応) ---
-    components.html("""
-    <script>
-        const setSticky = () => {
-            const anchors = window.parent.document.querySelectorAll('.sticky-header-anchor');
-            anchors.forEach(anchor => {
-                let container = anchor.closest('.element-container');
-                if (container && container.nextElementSibling) {
-                    let target = container.nextElementSibling;
-                    target.style.position = 'sticky';
-                    target.style.top = '0px';
-                    target.style.zIndex = '9999';
-                    target.style.backgroundColor = '#1e1e1e';
-                    target.style.borderBottom = '2px solid #1DB954';
-                    target.style.paddingTop = '10px';
-                    target.style.paddingBottom = '10px';
-                }
-            });
-        };
-        const observer = new MutationObserver(setSticky);
-        observer.observe(window.parent.document.body, { childList: true, subtree: true });
-        setTimeout(setSticky, 100);
-    </script>
-    """, height=0, width=0)
+                if orig_status != new_status:
+                    # 日本語ステータスをデータベース用の英語に変換
+                    db_status = "Pending" if new_status == "未プレイ" else ("Played" if new_status == "プレイ済" else "Archived")
+                    update_status(row["ID"], db_status)
+                    changed = True
+                    
+            if changed:
+                st.success("変更を保存しました！")
+                time.sleep(1)
+                st.rerun()
+            else:
+                st.info("変更点はありませんでした。")
