@@ -633,53 +633,107 @@ else:
     
     admin_view = st.radio("表示するリスト", ["未プレイ (新着)", "プレイ済 (履歴)"], horizontal=True)
     
-    st.write("💡 表のセルをダブルクリックして直接編集できます。（行の追加・削除も可能）")
-    st.write("※ステータスを変更した場合は、表の下にある「変更を保存」ボタンを押してください。")
-    
     if admin_view == "未プレイ (新着)":
+        st.write("新着リクエスト一覧")
         requests = get_pending_requests()
+        
+        if not requests:
+            st.info("現在、保留中のリクエストはありません。")
+        else:
+            st.markdown('<div class="sticky-header-anchor"></div>', unsafe_allow_html=True)
+            hc1, hc2, hc3, hc4, hc5, hc6 = st.columns([1.5, 2, 1.5, 2, 1, 1.5])
+            hc1.write("**📛 依頼者**")
+            hc2.write("**🎵 曲名**")
+            hc3.write("**👤 歌手**")
+            hc4.write("**💬 コメント**")
+            hc5.write("**🔗 リンク**")
+            hc6.write("**⚙️ 操作**")
+            st.divider()
+            
+            for req in requests:
+                req_id, timestamp, handle, title, artist, url, comment = req
+                
+                c1, c2, c3, c4, c5, c6 = st.columns([1.5, 2, 1.5, 2, 1, 1.5])
+                c1.write(handle)
+                c2.write(title)
+                c3.write(artist)
+                c4.write(comment)
+                
+                with c5:
+                    if url:
+                        st.markdown(f'<a href="{url}" target="_blank" style="color: #1DB954; font-weight: bold;">YouTube</a>', unsafe_allow_html=True)
+                
+                with c6:
+                    bc1, bc2 = st.columns(2)
+                    with bc1:
+                        if st.button("▶️", key=f"play_{req_id}", help="プレイ済にする", use_container_width=True):
+                            update_status(req_id, 'Played')
+                            st.rerun()
+                    with bc2:
+                        if st.button("🗑️", key=f"arch_{req_id}", help="削除(アーカイブ)", use_container_width=True):
+                            update_status(req_id, 'Archived')
+                            st.rerun()
+                
+                st.divider()
+            
     else:
+        st.write("プレイ済みのリクエスト履歴")
         requests = get_played_requests()
         
-    if not requests:
-        st.info("データがありません。")
-    else:
-        # データベースの結果をPandasのDataFrameに変換
-        df = pd.DataFrame(requests, columns=["ID", "リクエスト日時", "依頼者", "曲名", "歌手", "YouTubeリンク", "コメント"])
-        df["ステータス"] = "未プレイ" if admin_view == "未プレイ (新着)" else "プレイ済"
-        
-        # カラムの詳細設定
-        config = {
-            "ID": st.column_config.NumberColumn("ID", disabled=True, width="small"),
-            "リクエスト日時": st.column_config.TextColumn("日時", disabled=True),
-            "YouTubeリンク": st.column_config.LinkColumn("YouTubeリンク", display_text="開く"),
-            "ステータス": st.column_config.SelectboxColumn(
-                "ステータス",
-                options=["未プレイ", "プレイ済", "削除(アーカイブ)"],
-                required=True,
-                width="medium"
-            )
-        }
-        
-        # Excel風のデータエディタを表示
-        edited_df = st.data_editor(df, column_config=config, use_container_width=True, hide_index=True)
-        
-        # 変更保存ボタン
-        if st.button("💾 ステータスの変更を保存", use_container_width=True):
-            changed = False
-            for index, row in edited_df.iterrows():
-                orig_status = df.at[index, "ステータス"]
-                new_status = row["ステータス"]
+        if not requests:
+            st.info("プレイ済みの履歴はありません。")
+        else:
+            st.markdown('<div class="sticky-header-anchor"></div>', unsafe_allow_html=True)
+            hc1, hc2, hc3, hc4, hc5, hc6 = st.columns([1.5, 2, 1.5, 2, 1, 1.5])
+            hc1.write("**📛 依頼者**")
+            hc2.write("**🎵 曲名**")
+            hc3.write("**👤 歌手**")
+            hc4.write("**💬 コメント**")
+            hc5.write("**🔗 リンク**")
+            hc6.write("**⚙️ 操作**")
+            st.divider()
+            
+            for req in requests:
+                req_id, timestamp, handle, title, artist, url, comment = req
                 
-                if orig_status != new_status:
-                    # 日本語ステータスをデータベース用の英語に変換
-                    db_status = "Pending" if new_status == "未プレイ" else ("Played" if new_status == "プレイ済" else "Archived")
-                    update_status(row["ID"], db_status)
-                    changed = True
-                    
-            if changed:
-                st.success("変更を保存しました！")
-                time.sleep(1)
-                st.rerun()
-            else:
-                st.info("変更点はありませんでした。")
+                c1, c2, c3, c4, c5, c6 = st.columns([1.5, 2, 1.5, 2, 1, 1.5])
+                c1.write(handle)
+                c2.write(title)
+                c3.write(artist)
+                c4.write(comment)
+                
+                with c5:
+                    if url:
+                        st.markdown(f'<a href="{url}" target="_blank" style="color: #555555; font-weight: bold;">YouTube</a>', unsafe_allow_html=True)
+                
+                with c6:
+                    if st.button("↩️ 戻す", key=f"undo_{req_id}", help="未プレイに戻す", use_container_width=True):
+                        update_status(req_id, 'Pending')
+                        st.rerun()
+                
+                st.divider()
+
+    # --- ヘッダー上部固定用 JavaScript (全ブラウザ対応) ---
+    components.html("""
+    <script>
+        const setSticky = () => {
+            const anchors = window.parent.document.querySelectorAll('.sticky-header-anchor');
+            anchors.forEach(anchor => {
+                let container = anchor.closest('.element-container');
+                if (container && container.nextElementSibling) {
+                    let target = container.nextElementSibling;
+                    target.style.position = 'sticky';
+                    target.style.top = '0px';
+                    target.style.zIndex = '9999';
+                    target.style.backgroundColor = '#1e1e1e';
+                    target.style.borderBottom = '2px solid #1DB954';
+                    target.style.paddingTop = '10px';
+                    target.style.paddingBottom = '10px';
+                }
+            });
+        };
+        const observer = new MutationObserver(setSticky);
+        observer.observe(window.parent.document.body, { childList: true, subtree: true });
+        setTimeout(setSticky, 100);
+    </script>
+    """, height=0, width=0)
